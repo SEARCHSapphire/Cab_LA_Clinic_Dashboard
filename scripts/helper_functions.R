@@ -578,6 +578,36 @@ createEnrollmentSummary <- function(df) {
 
 
 #-------------------------------------------------------------------------------
+# Follow-up Summary - General
+#-------------------------------------------------------------------------------
+createFollowupSummary <- function(df, selectedvweek) {
+  df_return <- df %>%
+    filter(study_visit == selectedvweek) %>%
+    mutate(arm = ifelse(study_arm == 1, "Int", "Con")) %>%
+    group_by(arm) %>%
+    summarise(`# Seen` = n(),
+              `# PrEP` = sprintf("%d (%.1f%%)",sum(dcp_choice == 1, na.rm = T), sum(dcp_choice == 1, na.rm = T)/n()*100),
+              `# PEP` = sprintf("%d (%.1f%%)",sum(dcp_choice == 2, na.rm = T), sum(dcp_choice == 2, na.rm = T)/n()*100),
+              `# Rapid-Test` = sprintf("%d (%.1f%%)",sum(testchoice == 2, na.rm = T), sum(testchoice == 2, na.rm = T)/n()*100),
+              `# Self-Test` = sprintf("%d (%.1f%%)",sum(testchoice == 1, na.rm = T), sum(testchoice == 1, na.rm = T)/n()*100),
+              `# Offered CAB-LA` = sprintf("%d (%.1f%%)",sum(cab_offered == 1, na.rm = T), sum(cab_offered == 1, na.rm = T)/n()*100),
+              `# HIV-Positive` = sprintf("%d (%.1f%%)",sum(hivtest_result == 1, na.rm = T), sum(hivtest_result == 1, na.rm = T)/n()*100),
+    )
+  if(nrow(df_return) > 0) {
+    print(str(as.data.frame(df_return)))
+    df_summary <- t(df_return)
+   row.names(df_summary) <- c("Arm", '# Seen','# PrEP','# PEP','# Rapid-Test',
+                              '# Self-Test','# Offered CAB-LA','# HIV-Positive')
+    print(str(df_summary))
+  } else {
+    df_summary <- data.frame()
+  }
+  
+  return(datatable(df_summary, options = list(dom = 't'))) #Display the table only
+}
+
+
+#-------------------------------------------------------------------------------
 # Enrollment Summary - CABLA
 #-------------------------------------------------------------------------------
 createEnrollmentSummaryCab <- function(df, df_wd, df_death, df_sero) {
@@ -589,6 +619,39 @@ createEnrollmentSummaryCab <- function(df, df_wd, df_death, df_sero) {
               `% Enrolled` = sprintf("%.1f%%", `# Enrolled`/`# Screened` * 100)
     )
   return(df_return)
+}
+
+
+#-------------------------------------------------------------------------------
+# Follow-up Summary - Cab-LA
+#-------------------------------------------------------------------------------
+createFollowupSummaryCab <- function(df, selectedvweek) {
+  df_return <- df %>%
+    filter(cab_vweek == selectedvweek) %>%
+    mutate(arm = ifelse(study_arm == 1, "Int", "Con")) %>%
+    group_by(arm) %>%
+    summarise(`# Seen` = n(),
+              `# stopped Cab` = sprintf("%d (%.1f%%)",sum(stop_cab == 1, na.rm = T), sum(stop_cab == 1, na.rm = T)/n()*100),
+              `# HIV RNA Collected` = sprintf("%d (%.1f%%)",sum(specimen_collected == 1, na.rm = T), sum(specimen_collected == 1, na.rm = T)/n()*100),
+              `# Plasma Collected` = sprintf("%d (%.1f%%)",sum(plasma_collected == 1, na.rm = T), sum(plasma_collected == 1, na.rm = T)/n()*100),
+              `# Hair Collected` = sprintf("%d (%.1f%%)",sum(hair_collected == 1, na.rm = T), sum(hair_collected == 1, na.rm = T)/n()*100),
+              `# Offered CAB-LA` = sprintf("%d (%.1f%%)",sum(offered_cab == 1, na.rm = T), sum(offered_cab == 1, na.rm = T)/n()*100),
+              `# Pregnant` = sprintf("%d (%.1f%%)",sum(pregnancy_test_result == 1, na.rm = T), sum(pregnancy_test_result == 1, na.rm = T)/n()*100),
+              `# HIV-Positive` = sprintf("%d (%.1f%%)",sum(hivtest_result == 1, na.rm = T), sum(hivtest_result == 1, na.rm = T)/n()*100),
+              `# Completed CAB Survey` = sprintf("%d (%.1f%%)",sum(cab_survey_completed == 1, na.rm = T), sum(cab_survey_completed == 1, na.rm = T)/n()*100)
+    )
+  if(nrow(df_return) > 0) {
+    print(str(as.data.frame(df_return)))
+    df_summary <- t(df_return)
+    row.names(df_summary) <- c("Arm", '# Seen','# stopped Cab','# HIV RNA Collected','# Plasma Collected',
+                               '# Hair Collected','# Offered CAB-LA', '# Pregnant', '# HIV-Positive',
+                               '# Completed CAB Survey')
+    print(str(df_summary))
+  } else {
+    df_summary <- data.frame()
+  }
+  
+  return(datatable(df_summary, options = list(dom = 't'))) #Display the table only
 }
 
 

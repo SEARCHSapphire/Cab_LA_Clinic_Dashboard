@@ -207,10 +207,10 @@ server <- function(input, output, session) {
   
   
   # ---------------------------------------------------------------------------
-  # ENROLLMENT SUMMARY UI
+  # REPORTS SUMMARY UI
   # ---------------------------------------------------------------------------
   # Table 
-  output$enr_summary_ui = renderUI({
+  output$rpt_summary_ui = renderUI({
     fluidPage(
       fluidRow(
         box(status ='primary',
@@ -221,6 +221,21 @@ server <- function(input, output, session) {
           solidHeader = TRUE,
           title='CAB-LA Enrollment Summary',
           tableOutput('enrollment_cab_table'))
+      ),
+      fluidRow(
+        box(status ='primary',
+            solidHeader = TRUE,
+            title='NON-CAB-LA Follow-up Visits Summary Report',
+            selectInput('visit_week_noncab', label = 'Follow-up Visit Week:',
+                        choices = c('Week 12' = '12', 'Week 24' = '24',  'Week 36' = '36',  'Week 48' = '48')),
+            dataTableOutput('fu_noncab_table')),
+        box(status ='primary',
+            solidHeader = TRUE,
+            title='CAB-LA Follow-up Visits Summary',
+            selectInput('visit_week_cab', label = 'CAB-LA Follow-up Visit Week:',
+                        choices = c('CAB Week 4' = '4', 'CAB Week 8' = '8','CAB Week 16' = '16', 'CAB Week 24' = '24',  
+                                    'CAB Week 32' = '32', 'CAB Week 40' = '40',  'CAB Week 48' = '48')),
+            dataTableOutput('fu_cab_table'))
       )
       )
   })
@@ -233,12 +248,25 @@ server <- function(input, output, session) {
   #   HTML(sprintf('<br><h3> </h3>'))
   # })
   
+  # Enrollment Reports
   output$enrollment_table <- renderTable({
     createEnrollmentSummary(df_enr())
   })
   
   output$enrollment_cab_table <- renderTable({
     createEnrollmentSummaryCab(df_enr_cab())
+  })
+  
+  
+  # Follow-up Reports
+  output$fu_noncab_table <- renderDataTable({
+    createFollowupSummary(df_non_cab_fu(), input$visit_week_noncab)
+    
+  })
+  
+  output$fu_cab_table <- renderDataTable({
+    createFollowupSummaryCab(df_cab_fu(), input$visit_week_cab)
+    
   })
   
   # -------------------------------------------
