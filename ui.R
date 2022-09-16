@@ -27,7 +27,7 @@ ui <- fluidPage(
       # actionButton("search", "Search"),
       actionButton("refresh_db",label = "Refresh", icon('sync')),
       HTML('<br><br>'),
-      footer = fluidPage(htmlOutput('software_version'))
+      htmlOutput('software_version')
       
     ),
     
@@ -37,11 +37,11 @@ ui <- fluidPage(
       # Output: Tabset w/ plot, summary, and table ----
       tabsetPanel(type = "tabs",
                   tabPanel("Participant Schedule", uiOutput('scheduleA_table_ui')),
-                  tabPanel("Summary Reports", uiOutput('enr_summary_ui')),
+                  tabPanel("Summary Reports", uiOutput('rpt_summary_ui')),
                   tabPanel("Contact Directory", uiOutput('participant_dir_ui')),
                   tabPanel("Visit Summary", uiOutput('visit_table_ui')),
-                  tabPanel("Missed Visits", timevisOutput("ind_timeline")),
-                  tabPanel("Visit Schedule - CAB", timevisOutput("timelineGroups"))
+                  tabPanel("Missed Visits & Other", uiOutput("missed_visits_ui")),
+                  # tabPanel("Visit Schedule - CAB", timevisOutput("timelineGroups"))
       )
       
     )

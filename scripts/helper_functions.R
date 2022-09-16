@@ -75,7 +75,8 @@ createCalendar = function(df_schedule) {
     df_temp$window_span = as.Date(as.character(df_temp$window_span))
     df <- df_temp %>%
       group_by(window_span) %>%
-      summarise(count = n())
+      summarise(count = n()) %>%
+      filter(!grepl("S(at|un)", weekdays(as.Date(window_span), abbr=TRUE)))
     
     df$ctstr = with(df, ifelse(count > 1, sprintf('%s Visits', count), '1 Visit'))
     data_calendar = data.frame(title = df$ctstr,
@@ -94,25 +95,36 @@ createCalendar = function(df_schedule) {
   return(fullcalendar())
 }
 
-createInteractiveSchedule = function(df_master, inputDate) {
+createInteractiveSchedule = function(df_master, inputDate, showattended) {
   
   if(nrow(df_master) > 0) {
-    df <- df_master %>%
-      # mutate(status = "Not Seen") %>%
-      filter(as.Date(as.character(window_span)) == inputDate)
+    if (showattended == TRUE) {
+      df <- df_master %>%
+        # mutate(status = "Not Seen") %>%
+        filter(as.Date(as.character(window_span)) == inputDate & status != "Already Seen")
+    } else {
+      df <- df_master %>%
+        filter(as.Date(as.character(window_span)) == inputDate)
+      
+    }
+    
   }
- # df <- df_master %>%
- #   mutate(status = "Not Seen") 
+  
+  # Add column to check if participant's window closes in the next 5 days and highlight in red
+  df <- df %>%
+    mutate(closes_5d = ifelse((as.Date(window_close) >= Sys.Date() & as.Date(window_close) - Sys.Date() <=5 & status != "Already Seen"), 1,
+                              ifelse(as.Date(window_close) < Sys.Date() & status != "Already Seen", 2, 0)))
+ 
   final_dt = datatable(df,
                        escape=F, selection = 'none',
                        options = 
-                         list(#columnDefs = list(list(visible=FALSE, targets=c(4))), 
+                         list(columnDefs = list(list(visible=FALSE, targets=7)), # hide the conditional color formatting column
                               language = list(
                                 zeroRecords = "No scheduled visits on this day.",
                                 search = 'Find in table:')), rownames = FALSE)  %>% formatStyle(
-                                  'status',
+                                  'closes_5d',
                                   target = 'row',
-                                  backgroundColor = styleEqual(c(1, 0), c('white', 'lightpink'))
+                                  backgroundColor = styleEqual(c(2, 1, 0), c('yellow', 'red', 'white'))
                                 )
   
   return(final_dt)
@@ -357,6 +369,8 @@ create_schedule <- function(df_baseline_all, df_baseline_cab, df_non_cab_fu, df_
   # so that they are listed in the calender across all the dates of interest
   
   df <- rbind(df1, df2, df3)
+
+  
   df2 <- df %>%
     mutate(window_span = window_start)
   
@@ -385,7 +399,10 @@ create_schedule <- function(df_baseline_all, df_baseline_cab, df_non_cab_fu, df_
     
   }
   
+  
   df2 <- df2[!duplicated(df2[, c('subjid', 'window_span')]),]
+  
+  
   
   # Update schedule
   if (missing(df_24)) {
@@ -578,6 +595,36 @@ createEnrollmentSummary <- function(df) {
 
 
 #-------------------------------------------------------------------------------
+# Follow-up Summary - General
+#-------------------------------------------------------------------------------
+createFollowupSummary <- function(df, selectedvweek) {
+  df_return <- df %>%
+    filter(study_visit == selectedvweek) %>%
+    mutate(arm = ifelse(study_arm == 1, "Int", "Con")) %>%
+    group_by(arm) %>%
+    summarise(`# Seen` = n(),
+              `# PrEP` = sprintf("%d (%.1f%%)",sum(dcp_choice == 1, na.rm = T), sum(dcp_choice == 1, na.rm = T)/n()*100),
+              `# PEP` = sprintf("%d (%.1f%%)",sum(dcp_choice == 2, na.rm = T), sum(dcp_choice == 2, na.rm = T)/n()*100),
+              `# Rapid-Test` = sprintf("%d (%.1f%%)",sum(testchoice == 2, na.rm = T), sum(testchoice == 2, na.rm = T)/n()*100),
+              `# Self-Test` = sprintf("%d (%.1f%%)",sum(testchoice == 1, na.rm = T), sum(testchoice == 1, na.rm = T)/n()*100),
+              `# Offered CAB-LA` = sprintf("%d (%.1f%%)",sum(cab_offered == 1, na.rm = T), sum(cab_offered == 1, na.rm = T)/n()*100),
+              `# HIV-Positive` = sprintf("%d (%.1f%%)",sum(hivtest_result == 1, na.rm = T), sum(hivtest_result == 1, na.rm = T)/n()*100),
+    )
+  if(nrow(df_return) > 0) {
+    print(str(as.data.frame(df_return)))
+    df_summary <- t(df_return)
+   row.names(df_summary) <- c("Arm", '# Seen','# PrEP','# PEP','# Rapid-Test',
+                              '# Self-Test','# Offered CAB-LA','# HIV-Positive')
+    print(str(df_summary))
+  } else {
+    df_summary <- data.frame()
+  }
+  
+  return(datatable(df_summary, options = list(dom = 't'))) #Display the table only
+}
+
+
+#-------------------------------------------------------------------------------
 # Enrollment Summary - CABLA
 #-------------------------------------------------------------------------------
 createEnrollmentSummaryCab <- function(df, df_wd, df_death, df_sero) {
@@ -589,6 +636,39 @@ createEnrollmentSummaryCab <- function(df, df_wd, df_death, df_sero) {
               `% Enrolled` = sprintf("%.1f%%", `# Enrolled`/`# Screened` * 100)
     )
   return(df_return)
+}
+
+
+#-------------------------------------------------------------------------------
+# Follow-up Summary - Cab-LA
+#-------------------------------------------------------------------------------
+createFollowupSummaryCab <- function(df, selectedvweek) {
+  df_return <- df %>%
+    filter(cab_vweek == selectedvweek) %>%
+    mutate(arm = ifelse(study_arm == 1, "Int", "Con")) %>%
+    group_by(arm) %>%
+    summarise(`# Seen` = n(),
+              `# stopped Cab` = sprintf("%d (%.1f%%)",sum(stop_cab == 1, na.rm = T), sum(stop_cab == 1, na.rm = T)/n()*100),
+              `# HIV RNA Collected` = sprintf("%d (%.1f%%)",sum(specimen_collected == 1, na.rm = T), sum(specimen_collected == 1, na.rm = T)/n()*100),
+              `# Plasma Collected` = sprintf("%d (%.1f%%)",sum(plasma_collected == 1, na.rm = T), sum(plasma_collected == 1, na.rm = T)/n()*100),
+              `# Hair Collected` = sprintf("%d (%.1f%%)",sum(hair_collected == 1, na.rm = T), sum(hair_collected == 1, na.rm = T)/n()*100),
+              `# Offered CAB-LA` = sprintf("%d (%.1f%%)",sum(offered_cab == 1, na.rm = T), sum(offered_cab == 1, na.rm = T)/n()*100),
+              `# Pregnant` = sprintf("%d (%.1f%%)",sum(pregnancy_test_result == 1, na.rm = T), sum(pregnancy_test_result == 1, na.rm = T)/n()*100),
+              `# HIV-Positive` = sprintf("%d (%.1f%%)",sum(hivtest_result == 1, na.rm = T), sum(hivtest_result == 1, na.rm = T)/n()*100),
+              `# Completed CAB Survey` = sprintf("%d (%.1f%%)",sum(cab_survey_completed == 1, na.rm = T), sum(cab_survey_completed == 1, na.rm = T)/n()*100)
+    )
+  if(nrow(df_return) > 0) {
+    print(str(as.data.frame(df_return)))
+    df_summary <- t(df_return)
+    row.names(df_summary) <- c("Arm", '# Seen','# stopped Cab','# HIV RNA Collected','# Plasma Collected',
+                               '# Hair Collected','# Offered CAB-LA', '# Pregnant', '# HIV-Positive',
+                               '# Completed CAB Survey')
+    print(str(df_summary))
+  } else {
+    df_summary <- data.frame()
+  }
+  
+  return(datatable(df_summary, options = list(dom = 't'))) #Display the table only
 }
 
 
@@ -1603,4 +1683,98 @@ getFollowup <- function(df) {
   
   
   return(c(return_string, return_string2))
+}
+
+
+#-------------------------------------------------------------------------------
+# get Participants have missed their visits and tracking status
+#-------------------------------------------------------------------------------
+getMissedVisits <- function(df_schedule, df_tracking, not_tracked) {
+  
+  df_missed <- df_schedule %>%
+    filter(window_close < Sys.Date() & status != "Already Seen")
+  
+  # drop any duplicates
+  if(nrow(df_missed)>0) {
+    df_missed <- df_missed[!duplicated(df_missed[, c('subjid', 'window_start')]),]
+  }
+  
+  # Update tracking status : Check if participant was tracked within the window period
+  df_tracking <- df_tracking %>%
+    mutate(date_tracked  = ifelse(grepl("-", vdate),  as.character(as.Date(as.character(vdate),'%Y-%m-%d')), as.character(as.Date(as.character(vdate),'%m/%d/%y'))),
+           tracking_outcome = case_when(outcome_tracking == 1 ~ "Participant Found",
+                                        outcome_tracking == 0 ~ "Participant Not Found")) %>%
+    arrange(desc(as.Date(date_tracked))) %>%
+    distinct(subjid, .keep_all = T)
+  
+  if(nrow(df_missed) > 0 & nrow(df_tracking) > 0) {
+    df <- df_missed %>%
+      rename(missed_visit_date = window_close) %>%
+      select(subjid, target_date, missed_visit_date, visit_week, status) %>%
+      merge(df_tracking[, c("subjid", "date_tracked", "tracking_outcome")], by="subjid", all.x = T) %>%
+      mutate(tracking_status = ifelse((is.na(date_tracked) | as.Date(target_date) > as.Date(date_tracked)), "Not Tracked", tracking_outcome)) %>%
+      arrange(missed_visit_date)
+      
+  } else {
+    
+    df <- df_missed %>%
+      rename(missed_visit_date = window_close) %>%
+      select(subjid, target_date, missed_visit_date, visit_week, status)
+  }
+   
+  if (not_tracked == TRUE) {
+    if(nrow(df) > 0) {
+      df <- df %>%
+        filter(tracking_status == "Not Tracked")
+    }
+  }
+  
+  
+  final_dt2 = datatable(df,
+                       escape=F, selection = 'none',
+                       options = 
+                         list(# columnDefs = list(list(visible=FALSE, targets=c(7))),
+                           pageLength = 5,
+                           language = list(
+                             zeroRecords = "No Missed Visits",
+                             search = 'Search:')), rownames = FALSE)
+  print(paste("Check output",typeof(final_dt2)))
+  return(final_dt2)
+  
+}
+
+
+#-------------------------------------------------------------------------------
+# get List of Participants who are due for a their visits based on custom number
+# of days provided by the user the minimum is 5 days and maximum is 30 days
+#-------------------------------------------------------------------------------
+
+getParticipantsDueForVisit <- function(df_schedule, ndays) {
+  # Due for visit in the next ndays or window closes in the ndays are they are yet to be seen
+  
+  df <- df_schedule %>%
+    filter(window_close <= Sys.Date() + as.numeric(ndays) & status != "Already Seen") %>%
+    distinct(subjid, .keep_all = T) 
+  
+  # Add column to check if participant's window closes in the next 5 days and highlight in red
+  df <- df %>%
+    mutate(closes_5d = ifelse((as.Date(window_close) >= Sys.Date() & as.Date(window_close) - Sys.Date() <=5 & status != "Already Seen"), 1,
+                              ifelse(as.Date(window_close) < Sys.Date() & status != "Already Seen", 2, 0)))
+  
+  final_dt = datatable(df,
+                       escape=F, selection = 'none',
+                       options = 
+                         list(columnDefs = list(list(visible=FALSE, targets=c(7))), # hide the conditional color formatting column
+                              pageLength = 5,
+                              language = list(
+                                zeroRecords = sprintf("No Participants are due for the next %s days", ndays),
+                                search = 'Find in table:')), rownames = FALSE)  %>% formatStyle(
+                                  'closes_5d',
+                                  target = 'row',
+                                  backgroundColor = styleEqual(c(2, 1, 0), c('yellow', 'red', 'white'))
+                                )
+  
+  return(final_dt)
+  
+  
 }
