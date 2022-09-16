@@ -2,7 +2,7 @@ library(timevis)
 library(dplyr)
 library(shiny)
 
-sw_version_date = '2022.08.31'
+sw_version_date <- "2022-09-16"
 
 helperfilepath <- file.path("scripts","helper_functions.R")
 source(helperfilepath)
@@ -15,7 +15,7 @@ server <- function(input, output, session) {
   # -------------------------------------------
   # SOFTWARE VERSION DATE
   # -------------------------------------------
-  sw_version_date <- "2022-09-14"
+  
   output$software_version = renderUI({
     HTML(sprintf('<br> &nbsp &nbsp &nbsp Software Version: <b>%s</b>', sw_version_date))
   })
@@ -94,6 +94,10 @@ server <- function(input, output, session) {
     ret_val <- cabla$data$cab_reinduction
   })
   
+  df_tracking <- reactive({
+    ret_val <- cabla$data$tracking
+  })
+  
   
   # -------------------------------------------
   # QUICK JUMP DATA SELECTOR: TODAY AND TOMORROW
@@ -165,6 +169,7 @@ server <- function(input, output, session) {
   output$scheduleA_table_ui = renderUI({
     fluidPage(
       htmlOutput('date_statement'),
+      materialSwitch('showattended', 'Hide Already attended visits', status = 'primary'),
       dataTableOutput('schedule_table'),
       
       # Not sure how this work, but allows click interaction with the table
@@ -202,7 +207,7 @@ server <- function(input, output, session) {
   
   output$schedule_table = renderDataTable({
     df <- df_scheduled()
-    createInteractiveSchedule(df, selected_cal_date())
+    createInteractiveSchedule(df, selected_cal_date(), input$showattended)
   })
   
   
@@ -369,7 +374,7 @@ server <- function(input, output, session) {
       fluidPage(
       htmlOutput('contact_details')),
       footer = tagList(actionButton("refresh_contact",label = "Refresh", icon = icon('refresh')),
-                         actionButton("dismiss_contact",label = "Close"),modalButton("Cancel_contact")) , size = 'l')
+                         actionButton("dismiss_contact",label = "Close"),modalButton("Cancel")) , size = 'l')
   })
   
   # ---------------------------------------------------------------------------
@@ -499,7 +504,50 @@ server <- function(input, output, session) {
     }
   })
   
-  # Test timeline on calander
+  
+  #-----------------------------------------------------------------------------
+  # MISSED VISITS UI
+  #-----------------------------------------------------------------------------
+  
+  # This UI contains the list of participants who have missed their visits
+  # We will also have provision of have some custom schedules that cand veiwed
+  # based on the user selections
+  #-----------------------------------------------------------------------------
+  output$missed_visits_ui <- renderUI({
+    fluidPage(
+      fluidRow(
+        HTML(sprintf('<h3> Missed Visits Report </h3>')),
+        materialSwitch('not_tracked', 'Show those who were not tracked only', status = 'primary'),
+        dataTableOutput('missed_visit_list')
+               ),
+      fluidRow(
+        HTML(sprintf('<h3> Custom Schedules </h3>')),
+        selectInput('due_days', label = 'List of Participants Due for the next n days:',
+                    choices = c('5 Days' = '5', '10 Days' = '10','15 Days' = '15', '20 Days' = '20',  
+                                '25 Days' = '25', '30 Days' = '30')),
+        dataTableOutput('custom_schedule_list')
+      )
+    )
+  })
+  
+  
+  #-----------------------------------------------------------------------------
+  # Generate missed visits table
+  #-----------------------------------------------------------------------------
+  
+  output$missed_visit_list <- renderDataTable({
+    getMissedVisits(df_scheduled(), df_tracking(), input$not_tracked)
+  })
+  
+  #-----------------------------------------------------------------------------
+  # Generate custom schedule table
+  #-----------------------------------------------------------------------------
+  
+  output$custom_schedule_list <- renderDataTable({
+    getParticipantsDueForVisit(df_scheduled(), input$due_days)
+  })
+  
+  # Test timeline on calendar
   # create timeline, see helper function below
   data <- data.frame(
     id      = 1:4,
